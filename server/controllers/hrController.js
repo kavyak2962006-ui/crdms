@@ -571,11 +571,21 @@ const getDriveApplicants = async (req, res) => {
   }
 };
 
-// Export shortlisted candidates for a placement drive to CSV
-const exportShortlistedCandidates = async (req, res) => {
+// Export candidates for a placement drive to CSV based on status
+const exportCandidates = async (req, res) => {
   try {
     const hrUserId = req.user.id;
     const { id } = req.params;
+    const { status } = req.query;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status query parameter is required for export.' });
+    }
+
+    const validStatuses = ['Applied', 'Shortlisted', 'Interview', 'Offered', 'Rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status provided.' });
+    }
 
     // Verify drive exists and belongs to this HR
     const [driveRows] = await pool.query(
@@ -589,7 +599,7 @@ const exportShortlistedCandidates = async (req, res) => {
 
     const drive = driveRows[0];
 
-    // Fetch shortlisted candidates
+    // Fetch candidates by status
     const [applicants] = await pool.query(
       `SELECT
         a.id AS application_id,
@@ -605,13 +615,13 @@ const exportShortlistedCandidates = async (req, res) => {
       FROM applications a
       JOIN users u ON a.student_id = u.id
       LEFT JOIN student_profiles sp ON u.id = sp.user_id
-      WHERE a.job_id = ? AND a.status = 'Shortlisted'
+      WHERE a.job_id = ? AND a.status = ?
       ORDER BY u.name ASC`,
-      [id]
+      [id, status]
     );
 
     if (applicants.length === 0) {
-      return res.status(404).json({ message: 'No shortlisted candidates found to export.' });
+      return res.status(404).json({ message: `No ${status.toLowerCase()} candidates found to export.` });
     }
 
     // Build CSV
@@ -649,15 +659,60 @@ const exportShortlistedCandidates = async (req, res) => {
       csvContent += row.map(escapeCsv).join(',') + '\n';
     });
 
-    const safeFilename = `shortlisted_${drive.company}_${drive.title}`.replace(/[^a-z0-9_]/gi, '_').toLowerCase() + '.csv';
+    const safeFilename = `${status.toLowerCase()}_candidates_${drive.company}_${drive.title}`.replace(/[^a-z0-9_]/gi, '_').toLowerCase() + '.csv';
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
     res.status(200).send(csvContent);
 
   } catch (error) {
-    console.error('Error exporting shortlisted candidates:', error);
-    res.status(500).json({ message: 'Failed to export shortlisted candidates.' });
+    console.error('Error exporting candidates:', error);
+    res.status(500).json({ message: 'Failed to export candidates.' });
+  }
+};
+
+// Bulk update applicant statuses for a drive
+const updateApplicantStatus = async (req, res) => {
+  try {
+    const hrUserId = req.user.id;
+    const { id } = req.params;
+    const { applicationIds, status } = req.body;
+
+    if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+      return res.status(400).json({ message: 'No candidates selected for update.' });
+    }
+
+    const validStatuses = ['Applied', 'Shortlisted', 'Interview', 'Offered', 'Rejected'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status provided.' });
+    }
+
+    // Verify drive belongs to HR
+    const [driveRows] = await pool.query(
+      'SELECT id FROM job_postings WHERE id = ? AND hr_id = ?',
+      [id, hrUserId]
+    );
+
+    if (driveRows.length === 0) {
+      return res.status(404).json({ message: 'Placement drive not found or access denied.' });
+    }
+
+    // Update statuses
+    // Create placeholders for IN clause
+    const placeholders = applicationIds.map(() => '?').join(',');
+    const [result] = await pool.query(
+      `UPDATE applications SET status = ? WHERE job_id = ? AND id IN (${placeholders})`,
+      [status, id, ...applicationIds]
+    );
+
+    res.status(200).json({
+      message: `${result.affectedRows} candidate(s) updated to '${status}'.`,
+      updatedCount: result.affectedRows
+    });
+
+  } catch (error) {
+    console.error('Error updating applicant statuses:', error);
+    res.status(500).json({ message: 'Failed to update candidate statuses.' });
   }
 };
 
@@ -672,7 +727,8 @@ module.exports = {
   updateHRDrive,
   deleteHRDrive,
   getDriveApplicants,
-  exportShortlistedCandidates,
+  exportCandidates,
+  updateApplicantStatus,
   computeDriveStatus,
   parseDriveEligibility
 };

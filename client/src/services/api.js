@@ -49,7 +49,8 @@ export const createPlacementDrive = (data) => api.post('/hr/drives', data);
 export const updateHRDrive = (id, data) => api.put(`/hr/drives/${id}`, data);
 export const deleteHRDrive = (id) => api.delete(`/hr/drives/${id}`);
 export const getDriveApplicants = (driveId) => api.get(`/hr/drives/${driveId}/applicants`);
-export const exportShortlistedCandidates = (driveId) => api.get(`/hr/drives/${driveId}/shortlisted/export`, { responseType: 'blob' });
+export const updateApplicantStatus = (driveId, data) => api.put(`/hr/drives/${driveId}/applicants/status`, data);
+export const exportCandidates = (driveId, status) => api.get(`/hr/drives/${driveId}/export?status=${encodeURIComponent(status)}`, { responseType: 'blob' });
 
 // Notification API helpers (HR)
 export const getHRNotifications = () => api.get('/hr/notifications');

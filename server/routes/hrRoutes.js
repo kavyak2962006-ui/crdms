@@ -11,7 +11,8 @@ const {
   updateHRDrive,
   deleteHRDrive,
   getDriveApplicants,
-  exportShortlistedCandidates
+  exportCandidates,
+  updateApplicantStatus
 } = require('../controllers/hrController');
 const { getCompanyProfile, createCompanyProfile, updateCompanyProfile } = require('../controllers/companyController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
@@ -45,7 +46,8 @@ router.get('/drives/:id', getHRDriveById);
 router.put('/drives/:id', updateHRDrive);
 router.delete('/drives/:id', deleteHRDrive);
 router.get('/drives/:id/applicants', getDriveApplicants);
-router.get('/drives/:id/shortlisted/export', exportShortlistedCandidates);
+router.put('/drives/:id/applicants/status', updateApplicantStatus);
+router.get('/drives/:id/export', exportCandidates);
 
 // Company profile routes (HR only)
 router.get('/company/profile', getCompanyProfile);

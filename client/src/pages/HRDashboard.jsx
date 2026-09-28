@@ -32,7 +32,8 @@ import api, {
   updateHRDrive, 
   deleteHRDrive, 
   getDriveApplicants,
-  exportShortlistedCandidates,
+  exportCandidates,
+  updateApplicantStatus,
   markNotificationRead,
   markAllNotificationsRead 
 } from '../services/api';
@@ -84,6 +85,10 @@ const HRDashboard = () => {
   const [applicantsLoading, setApplicantsLoading] = useState(false);
   const [applicantsError, setApplicantsError] = useState('');
   const [exportingDriveId, setExportingDriveId] = useState(null);
+  const [exportStatuses, setExportStatuses] = useState({});
+  const [selectedApplicants, setSelectedApplicants] = useState([]);
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     fetchHRDashboard();
@@ -350,17 +355,18 @@ const HRDashboard = () => {
     }
   };
 
-  const handleExportShortlisted = async (driveId) => {
+  const handleExportCandidates = async (driveId) => {
     try {
       setExportingDriveId(driveId);
-      const res = await exportShortlistedCandidates(driveId);
+      const statusToExport = exportStatuses[driveId] || 'Applied';
+      const res = await exportCandidates(driveId, statusToExport);
       
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
       
       const contentDisposition = res.headers['content-disposition'];
-      let filename = 'shortlisted_candidates.csv';
+      let filename = `${statusToExport.toLowerCase()}_candidates.csv`;
       if (contentDisposition && contentDisposition.includes('filename=')) {
         filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
       }
@@ -373,7 +379,7 @@ const HRDashboard = () => {
       
     } catch (err) {
       console.error('Export error:', err);
-      let errMsg = 'Failed to export shortlisted candidates.';
+      let errMsg = 'Failed to export candidates.';
       if (err.response && err.response.data instanceof Blob) {
         try {
           const text = await err.response.data.text();
@@ -391,7 +397,50 @@ const HRDashboard = () => {
     }
   };
 
+  const handleSelectAll = (e, driveId) => {
+    if (e.target.checked) {
+      const allAppIds = applicantsData[driveId]?.applicants?.map(a => a.application_id) || [];
+      setSelectedApplicants(allAppIds);
+    } else {
+      setSelectedApplicants([]);
+    }
+  };
+
+  const handleSelectApplicant = (e, applicationId) => {
+    if (e.target.checked) {
+      setSelectedApplicants(prev => [...prev, applicationId]);
+    } else {
+      setSelectedApplicants(prev => prev.filter(id => id !== applicationId));
+    }
+  };
+
+  const handleUpdateStatus = async (driveId) => {
+    if (selectedApplicants.length === 0) return;
+    if (!bulkStatus) {
+      alert('Please select a status to update.');
+      return;
+    }
+    try {
+      setUpdatingStatus(true);
+      const res = await updateApplicantStatus(driveId, {
+        applicationIds: selectedApplicants,
+        status: bulkStatus
+      });
+      alert(res.data.message);
+      setSelectedApplicants([]);
+      setBulkStatus('');
+      fetchApplicants(driveId);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to update candidate statuses.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const toggleApplicants = (driveId) => {
+    setSelectedApplicants([]);
+    setBulkStatus('');
     if (expandedDriveId === driveId) {
       setExpandedDriveId(null);
       setApplicantsError('');
@@ -965,14 +1014,27 @@ const HRDashboard = () => {
                               {applicantsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                               <span>Refresh</span>
                             </button>
-                            <button
-                              onClick={() => handleExportShortlisted(job.id)}
-                              disabled={exportingDriveId === job.id}
-                              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold transition shadow-sm shadow-indigo-900/50 disabled:opacity-50"
-                            >
-                              {exportingDriveId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                              <span>{exportingDriveId === job.id ? 'Exporting...' : 'Export Shortlisted'}</span>
-                            </button>
+                            <div className="flex items-center space-x-1">
+                              <select
+                                value={exportStatuses[job.id] || 'Applied'}
+                                onChange={(e) => setExportStatuses(prev => ({ ...prev, [job.id]: e.target.value }))}
+                                className="bg-slate-900 border border-indigo-500/30 text-indigo-300 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-400"
+                              >
+                                <option value="Applied">Applied</option>
+                                <option value="Shortlisted">Shortlisted</option>
+                                <option value="Interview">Interview</option>
+                                <option value="Offered">Offered</option>
+                                <option value="Rejected">Rejected</option>
+                              </select>
+                              <button
+                                onClick={() => handleExportCandidates(job.id)}
+                                disabled={exportingDriveId === job.id}
+                                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold transition shadow-sm shadow-indigo-900/50 disabled:opacity-50"
+                              >
+                                {exportingDriveId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                <span>{exportingDriveId === job.id ? 'Exporting...' : 'Export'}</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -989,11 +1051,51 @@ const HRDashboard = () => {
                             <p className="text-[11px]">Loading applicants...</p>
                           </div>
                         ) : applicantsData[job.id]?.applicants?.length > 0 ? (
-                          <div className="overflow-x-auto rounded-xl border border-slate-800">
-                            <table className="w-full text-[11px]">
-                              <thead>
-                                <tr className="bg-slate-900/80 text-slate-400 uppercase tracking-wider">
-                                  <th className="px-3 py-2.5 text-left font-semibold">#</th>
+                          <div className="space-y-4">
+                            {/* Bulk Action Panel */}
+                            {selectedApplicants.length > 0 && (
+                              <div className="flex items-center justify-between bg-indigo-900/30 border border-indigo-500/30 rounded-xl p-3 animate-in fade-in zoom-in-95">
+                                <div className="text-[11px] text-indigo-200 font-semibold">
+                                  {selectedApplicants.length} candidate(s) selected
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <select
+                                    value={bulkStatus}
+                                    onChange={(e) => setBulkStatus(e.target.value)}
+                                    className="bg-slate-900 border border-indigo-500/50 text-white text-[11px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-400"
+                                  >
+                                    <option value="">Select Status</option>
+                                    <option value="Applied">Applied</option>
+                                    <option value="Shortlisted">Shortlisted</option>
+                                    <option value="Interview">Interview</option>
+                                    <option value="Offered">Offered</option>
+                                    <option value="Rejected">Rejected</option>
+                                  </select>
+                                  <button
+                                    onClick={() => handleUpdateStatus(job.id)}
+                                    disabled={updatingStatus || !bulkStatus}
+                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition disabled:opacity-50 flex items-center space-x-1"
+                                  >
+                                    {updatingStatus && <Loader2 className="w-3 h-3 animate-spin" />}
+                                    <span>Update Status</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="overflow-x-auto rounded-xl border border-slate-800">
+                              <table className="w-full text-[11px]">
+                                <thead>
+                                  <tr className="bg-slate-900/80 text-slate-400 uppercase tracking-wider">
+                                    <th className="px-3 py-2.5 text-left font-semibold w-8">
+                                      <input 
+                                        type="checkbox" 
+                                        className="rounded border-slate-600 bg-slate-800/50 text-indigo-500 focus:ring-indigo-500/30"
+                                        checked={applicantsData[job.id].applicants.length > 0 && selectedApplicants.length === applicantsData[job.id].applicants.length}
+                                        onChange={(e) => handleSelectAll(e, job.id)}
+                                      />
+                                    </th>
+                                    <th className="px-3 py-2.5 text-left font-semibold">#</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Student Name</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Roll No</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Department</th>
@@ -1016,7 +1118,15 @@ const HRDashboard = () => {
                                     'Rejected': 'bg-red-500/15 text-red-300 border-red-500/25'
                                   };
                                   return (
-                                    <tr key={applicant.application_id} className="border-t border-slate-800/60 hover:bg-slate-900/40 transition">
+                                    <tr key={applicant.application_id} className={`border-t border-slate-800/60 transition ${selectedApplicants.includes(applicant.application_id) ? 'bg-indigo-900/20' : 'hover:bg-slate-900/40'}`}>
+                                      <td className="px-3 py-2.5">
+                                        <input 
+                                          type="checkbox" 
+                                          className="rounded border-slate-600 bg-slate-800/50 text-indigo-500 focus:ring-indigo-500/30"
+                                          checked={selectedApplicants.includes(applicant.application_id)}
+                                          onChange={(e) => handleSelectApplicant(e, applicant.application_id)}
+                                        />
+                                      </td>
                                       <td className="px-3 py-2.5 text-slate-500 font-mono">{idx + 1}</td>
                                       <td className="px-3 py-2.5 text-white font-semibold">
                                         <div className="flex items-center space-x-1.5">
@@ -1056,7 +1166,8 @@ const HRDashboard = () => {
                                   );
                                 })}
                               </tbody>
-                            </table>
+                              </table>
+                            </div>
                           </div>
                         ) : applicantsData[job.id] ? (
                           <div className="text-center py-8 text-slate-500">
