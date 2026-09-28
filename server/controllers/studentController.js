@@ -625,6 +625,55 @@ const bookInterviewSlot = async (req, res) => {
   }
 };
 
+// Get student notifications
+const getNotifications = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const [notifications] = await pool.query(
+      `SELECT * FROM notifications 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 50`,
+      [studentId]
+    );
+    res.status(200).json(notifications);
+  } catch (error) {
+    console.error('Error fetching student notifications:', error);
+    res.status(500).json({ message: 'Failed to fetch notifications.' });
+  }
+};
+
+// Mark single notification as read
+const markNotificationRead = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const { id } = req.params;
+    await pool.query(
+      `UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?`,
+      [id, studentId]
+    );
+    res.status(200).json({ message: 'Notification marked as read.' });
+  } catch (error) {
+    console.error('Error marking notification read:', error);
+    res.status(500).json({ message: 'Failed to mark notification as read.' });
+  }
+};
+
+// Mark all notifications as read
+const markAllNotificationsRead = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    await pool.query(
+      `UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE`,
+      [studentId]
+    );
+    res.status(200).json({ message: 'All notifications marked as read.' });
+  } catch (error) {
+    console.error('Error marking all notifications read:', error);
+    res.status(500).json({ message: 'Failed to mark all notifications as read.' });
+  }
+};
+
 module.exports = {
   getStudentDashboard,
   getStudentProfile,
@@ -634,6 +683,9 @@ module.exports = {
   registerForDrive,
   checkStudentEligibility,
   getAvailableInterviewSlots,
-  bookInterviewSlot
+  bookInterviewSlot,
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
 };
 

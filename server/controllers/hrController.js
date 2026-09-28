@@ -1,4 +1,5 @@
 const { pool } = require('../db');
+const { sendEmail } = require('../utils/emailService');
 
 // Helper to compute dynamic drive status based on current time
 const computeDriveStatus = (opening, closing) => {
@@ -290,6 +291,43 @@ const createPlacementDrive = async (req, res) => {
       `SELECT * FROM job_postings WHERE id = ?`,
       [newDriveId]
     );
+
+    // Background process for eligible student notifications
+    setImmediate(async () => {
+      try {
+        const { checkStudentEligibility } = require('./studentController');
+        
+        const [students] = await pool.query(
+          `SELECT u.id as user_id, u.email, u.name, sp.department, sp.year, sp.cgpa, sp.arrear_history
+           FROM users u
+           JOIN student_profiles sp ON u.id = sp.user_id
+           WHERE u.role = 'student' AND u.status = 'active'`
+        );
+
+        for (const student of students) {
+          const eligibility = checkStudentEligibility(student, createdDrive);
+          if (eligibility.eligible) {
+            await pool.query(
+              `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
+              [
+                student.user_id,
+                'New Placement Drive Available',
+                `A new placement drive has been published: ${companyName} - ${driveTitle}.`
+              ]
+            );
+
+            sendEmail(
+              student.email,
+              'CRDM – New Placement Drive Available',
+              `Hello ${student.name},\n\nA new placement drive is now available:\n\nCompany: ${companyName}\nDrive: ${driveTitle}\n\nPlease log in to CRDM to view complete details and apply if interested.\n\nRegards,\nCRDM Placement System`,
+              `<p>Hello ${student.name},</p><p>A new placement drive is now available:</p><p><b>Company:</b> ${companyName}<br><b>Drive:</b> ${driveTitle}</p><p>Please log in to CRDM to view complete details and apply if interested.</p><p>Regards,<br>CRDM Placement System</p>`
+            ).catch(err => console.error("Email failed silently."));
+          }
+        }
+      } catch (err) {
+        console.error("Error processing drive notifications:", err);
+      }
+    });
 
     res.status(201).json({
       message: 'Placement drive created successfully with structured eligibility requirements.',
@@ -673,37 +711,86 @@ const exportCandidates = async (req, res) => {
 
 // Bulk update applicant statuses for a drive
 const updateApplicantStatus = async (req, res) => {
+  const connection = await pool.getConnection();
   try {
     const hrUserId = req.user.id;
     const { id } = req.params;
     const { applicationIds, status } = req.body;
 
     if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+      connection.release();
       return res.status(400).json({ message: 'No candidates selected for update.' });
     }
 
     const validStatuses = ['Applied', 'Shortlisted', 'Interview', 'Offered', 'Rejected'];
     if (!status || !validStatuses.includes(status)) {
+      connection.release();
       return res.status(400).json({ message: 'Invalid status provided.' });
     }
 
     // Verify drive belongs to HR
-    const [driveRows] = await pool.query(
-      'SELECT id FROM job_postings WHERE id = ? AND hr_id = ?',
+    const [driveRows] = await connection.query(
+      'SELECT id, title, company FROM job_postings WHERE id = ? AND hr_id = ?',
       [id, hrUserId]
     );
 
     if (driveRows.length === 0) {
+      connection.release();
       return res.status(404).json({ message: 'Placement drive not found or access denied.' });
     }
+    const drive = driveRows[0];
 
-    // Update statuses
-    // Create placeholders for IN clause
+    // Find applications that will actually change
     const placeholders = applicationIds.map(() => '?').join(',');
-    const [result] = await pool.query(
-      `UPDATE applications SET status = ? WHERE job_id = ? AND id IN (${placeholders})`,
-      [status, id, ...applicationIds]
+    const [apps] = await connection.query(
+      `SELECT a.id, a.student_id, a.status as old_status, u.email, u.name
+       FROM applications a
+       JOIN users u ON a.student_id = u.id
+       WHERE a.job_id = ? AND a.id IN (${placeholders})`,
+      [id, ...applicationIds]
     );
+
+    const changingApps = apps.filter(app => app.old_status !== status);
+
+    if (changingApps.length === 0) {
+      connection.release();
+      return res.status(200).json({
+        message: '0 candidate(s) updated (all selected already had this status).',
+        updatedCount: 0
+      });
+    }
+
+    const changingIds = changingApps.map(a => a.id);
+    const changingPlaceholders = changingIds.map(() => '?').join(',');
+
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
+      `UPDATE applications SET status = ? WHERE id IN (${changingPlaceholders})`,
+      [status, ...changingIds]
+    );
+
+    for (const app of changingApps) {
+      await connection.query(
+        `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
+        [
+          app.student_id,
+          'Application Status Updated',
+          `Your application for ${drive.company} - ${drive.title} has moved to the ${status} stage.`
+        ]
+      );
+    }
+
+    await connection.commit();
+
+    for (const app of changingApps) {
+      sendEmail(
+        app.email,
+        'CRDM – Application Status Updated',
+        `Hello ${app.name},\n\nYour application status for:\nCompany: ${drive.company}\nPlacement Drive: ${drive.title}\n\nhas been updated to:\n${status}\n\nPlease log in to the CRDM portal for more details.\n\nRegards,\nCRDM Placement System`,
+        `<p>Hello ${app.name},</p><p>Your application status for:</p><p><b>Company:</b> ${drive.company}<br><b>Placement Drive:</b> ${drive.title}</p><p>has been updated to: <b>${status}</b></p><p>Please log in to the CRDM portal for more details.</p><p>Regards,<br>CRDM Placement System</p>`
+      ).catch(() => {});
+    }
 
     res.status(200).json({
       message: `${result.affectedRows} candidate(s) updated to '${status}'.`,
@@ -711,8 +798,11 @@ const updateApplicantStatus = async (req, res) => {
     });
 
   } catch (error) {
+    if (connection) await connection.rollback();
     console.error('Error updating applicant statuses:', error);
     res.status(500).json({ message: 'Failed to update candidate statuses.' });
+  } finally {
+    if (connection) connection.release();
   }
 };
 

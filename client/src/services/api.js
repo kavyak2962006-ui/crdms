@@ -66,6 +66,11 @@ export const registerForDrive = (id) => api.post(`/student/drives/${id}/register
 export const getAvailableInterviewSlots = (id) => api.get(`/student/drives/${id}/interview-slots`);
 export const bookInterviewSlot = (id, slotId) => api.post(`/student/drives/${id}/interview-slots/${slotId}/book`);
 
+// Notification API helpers (Student)
+export const getStudentNotifications = () => api.get('/student/notifications');
+export const markStudentNotificationRead = (id) => api.put(`/student/notifications/${id}/read`);
+export const markAllStudentNotificationsRead = () => api.put('/student/notifications/mark-all-read');
+
 // Placement Drive API helpers (Admin)
 export const getAdminDrives = () => api.get('/admin/drives');
 export const updateAdminDriveTimeline = (id, data) => api.put(`/admin/drives/${id}/timeline`, data);

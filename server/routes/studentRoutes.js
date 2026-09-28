@@ -8,7 +8,10 @@ const {
   getStudentDrives,
   registerForDrive,
   getAvailableInterviewSlots,
-  bookInterviewSlot
+  bookInterviewSlot,
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
 } = require('../controllers/studentController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 const { upload } = require('../middleware/upload');
@@ -28,5 +31,10 @@ router.post('/drives/:id/register', registerForDrive);
 
 router.get('/drives/:driveId/interview-slots', getAvailableInterviewSlots);
 router.post('/drives/:driveId/interview-slots/:slotId/book', bookInterviewSlot);
+
+// Notification routes
+router.get('/notifications', getNotifications);
+router.put('/notifications/:id/read', markNotificationRead);
+router.put('/notifications/mark-all-read', markAllNotificationsRead);
 
 module.exports = router;
