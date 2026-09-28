@@ -571,6 +571,96 @@ const getDriveApplicants = async (req, res) => {
   }
 };
 
+// Export shortlisted candidates for a placement drive to CSV
+const exportShortlistedCandidates = async (req, res) => {
+  try {
+    const hrUserId = req.user.id;
+    const { id } = req.params;
+
+    // Verify drive exists and belongs to this HR
+    const [driveRows] = await pool.query(
+      'SELECT id, title, company FROM job_postings WHERE id = ? AND hr_id = ?',
+      [id, hrUserId]
+    );
+
+    if (driveRows.length === 0) {
+      return res.status(404).json({ message: 'Placement drive not found or you do not have access.' });
+    }
+
+    const drive = driveRows[0];
+
+    // Fetch shortlisted candidates
+    const [applicants] = await pool.query(
+      `SELECT
+        a.id AS application_id,
+        u.name AS student_name,
+        u.email AS student_email,
+        sp.student_id AS student_roll_no,
+        sp.department,
+        sp.year,
+        sp.cgpa,
+        sp.arrear_history,
+        a.status AS application_status,
+        a.created_at AS applied_at
+      FROM applications a
+      JOIN users u ON a.student_id = u.id
+      LEFT JOIN student_profiles sp ON u.id = sp.user_id
+      WHERE a.job_id = ? AND a.status = 'Shortlisted'
+      ORDER BY u.name ASC`,
+      [id]
+    );
+
+    if (applicants.length === 0) {
+      return res.status(404).json({ message: 'No shortlisted candidates found to export.' });
+    }
+
+    // Build CSV
+    const escapeCsv = (str) => {
+      if (str === null || str === undefined) return '""';
+      const s = String(str);
+      if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+
+    const headers = [
+      'Application ID', 'Student Name', 'Email', 'Roll No', 'Department', 'Year',
+      'CGPA', 'Arrear History', 'Application Status', 'Applied At', 'Company', 'Drive Title'
+    ];
+
+    let csvContent = headers.map(escapeCsv).join(',') + '\n';
+
+    applicants.forEach(app => {
+      const row = [
+        app.application_id,
+        app.student_name,
+        app.student_email,
+        app.student_roll_no,
+        app.department,
+        app.year,
+        app.cgpa,
+        app.arrear_history,
+        app.application_status,
+        new Date(app.applied_at).toLocaleString(),
+        drive.company,
+        drive.title
+      ];
+      csvContent += row.map(escapeCsv).join(',') + '\n';
+    });
+
+    const safeFilename = `shortlisted_${drive.company}_${drive.title}`.replace(/[^a-z0-9_]/gi, '_').toLowerCase() + '.csv';
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    res.status(200).send(csvContent);
+
+  } catch (error) {
+    console.error('Error exporting shortlisted candidates:', error);
+    res.status(500).json({ message: 'Failed to export shortlisted candidates.' });
+  }
+};
+
 module.exports = {
   getHRDashboard,
   getHRNotifications,
@@ -582,6 +672,7 @@ module.exports = {
   updateHRDrive,
   deleteHRDrive,
   getDriveApplicants,
+  exportShortlistedCandidates,
   computeDriveStatus,
   parseDriveEligibility
 };

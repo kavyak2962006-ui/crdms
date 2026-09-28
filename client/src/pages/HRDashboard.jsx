@@ -32,6 +32,7 @@ import api, {
   updateHRDrive, 
   deleteHRDrive, 
   getDriveApplicants,
+  exportShortlistedCandidates,
   markNotificationRead,
   markAllNotificationsRead 
 } from '../services/api';
@@ -82,6 +83,7 @@ const HRDashboard = () => {
   const [applicantsData, setApplicantsData] = useState({});
   const [applicantsLoading, setApplicantsLoading] = useState(false);
   const [applicantsError, setApplicantsError] = useState('');
+  const [exportingDriveId, setExportingDriveId] = useState(null);
 
   useEffect(() => {
     fetchHRDashboard();
@@ -345,6 +347,47 @@ const HRDashboard = () => {
       setApplicantsError(err.response?.data?.message || 'Failed to load applicants.');
     } finally {
       setApplicantsLoading(false);
+    }
+  };
+
+  const handleExportShortlisted = async (driveId) => {
+    try {
+      setExportingDriveId(driveId);
+      const res = await exportShortlistedCandidates(driveId);
+      
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const contentDisposition = res.headers['content-disposition'];
+      let filename = 'shortlisted_candidates.csv';
+      if (contentDisposition && contentDisposition.includes('filename=')) {
+        filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      console.error('Export error:', err);
+      let errMsg = 'Failed to export shortlisted candidates.';
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.message) errMsg = json.message;
+        } catch (e) {
+          // Keep default
+        }
+      } else if (err.response?.data?.message) {
+        errMsg = err.response.data.message;
+      }
+      alert(errMsg);
+    } finally {
+      setExportingDriveId(null);
     }
   };
 
@@ -913,14 +956,24 @@ const HRDashboard = () => {
                               </span>
                             )}
                           </h5>
-                          <button
-                            onClick={() => fetchApplicants(job.id)}
-                            disabled={applicantsLoading}
-                            className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold transition border border-slate-700 disabled:opacity-50"
-                          >
-                            {applicantsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                            <span>Refresh</span>
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => fetchApplicants(job.id)}
+                              disabled={applicantsLoading}
+                              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold transition border border-slate-700 disabled:opacity-50"
+                            >
+                              {applicantsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                              <span>Refresh</span>
+                            </button>
+                            <button
+                              onClick={() => handleExportShortlisted(job.id)}
+                              disabled={exportingDriveId === job.id}
+                              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold transition shadow-sm shadow-indigo-900/50 disabled:opacity-50"
+                            >
+                              {exportingDriveId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                              <span>{exportingDriveId === job.id ? 'Exporting...' : 'Export Shortlisted'}</span>
+                            </button>
+                          </div>
                         </div>
 
                         {applicantsError && (
