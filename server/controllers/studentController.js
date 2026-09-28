@@ -520,7 +520,8 @@ const getAvailableInterviewSlots = async (req, res) => {
 
     // Fetch student's booking if any
     const [bookingRows] = await pool.query(
-      `SELECT s.* FROM interview_slots s
+      `SELECT s.id, s.job_id, DATE_FORMAT(s.interview_date, '%Y-%m-%d') as interview_date, s.start_time, s.end_time, s.duration_minutes, s.status, s.created_at 
+       FROM interview_slots s
        JOIN interview_bookings b ON s.id = b.slot_id
        WHERE b.application_id = ?`,
       [applicationId]
@@ -530,7 +531,8 @@ const getAvailableInterviewSlots = async (req, res) => {
 
     // Fetch available slots
     const [availableSlots] = await pool.query(
-      `SELECT * FROM interview_slots 
+      `SELECT id, job_id, DATE_FORMAT(interview_date, '%Y-%m-%d') as interview_date, start_time, end_time, duration_minutes, status, created_at 
+       FROM interview_slots 
        WHERE job_id = ? AND status = 'Available'
        ORDER BY interview_date ASC, start_time ASC`,
       [driveId]

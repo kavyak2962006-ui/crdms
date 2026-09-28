@@ -314,7 +314,7 @@ const StudentDashboard = () => {
                               <h6 className="text-[11px] font-semibold text-emerald-400 mb-1">My Interview Slot</h6>
                               <div className="flex justify-between items-center text-[11px] text-emerald-200">
                                 <div>
-                                  <p>Date: {new Date(interviewData[app.id].studentBooking.interview_date).toLocaleDateString()}</p>
+                                  <p>Date: {new Date(interviewData[app.id].studentBooking.interview_date.replace(/-/g, '/')).toLocaleDateString()}</p>
                                   <p>Time: {interviewData[app.id].studentBooking.start_time.substring(0, 5)} - {interviewData[app.id].studentBooking.end_time.substring(0, 5)}</p>
                                 </div>
                                 <span className="px-2 py-1 bg-emerald-500/20 rounded font-bold uppercase tracking-wider text-[9px]">Booked</span>
@@ -326,7 +326,7 @@ const StudentDashboard = () => {
                                 interviewData[app.id].availableSlots.map(slot => (
                                   <div key={slot.id} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
                                     <div className="text-[10px] text-slate-300 font-mono">
-                                      {new Date(slot.interview_date).toLocaleDateString()} <br/>
+                                      {new Date(slot.interview_date.replace(/-/g, '/')).toLocaleDateString()} <br/>
                                       {slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)}
                                     </div>
                                     <button

@@ -14,7 +14,8 @@ const {
   exportCandidates,
   updateApplicantStatus,
   generateInterviewSlots,
-  getInterviewSlots
+  getInterviewSlots,
+  deleteInterviewSlot
 } = require('../controllers/hrController');
 const { getCompanyProfile, createCompanyProfile, updateCompanyProfile } = require('../controllers/companyController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
@@ -52,6 +53,7 @@ router.put('/drives/:id/applicants/status', updateApplicantStatus);
 router.get('/drives/:id/export', exportCandidates);
 router.post('/drives/:id/interview-slots/generate', generateInterviewSlots);
 router.get('/drives/:id/interview-slots', getInterviewSlots);
+router.delete('/drives/:id/interview-slots/:slotId', deleteInterviewSlot);
 
 // Company profile routes (HR only)
 router.get('/company/profile', getCompanyProfile);

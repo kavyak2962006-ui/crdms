@@ -53,6 +53,7 @@ export const updateApplicantStatus = (driveId, data) => api.put(`/hr/drives/${dr
 export const exportCandidates = (driveId, status) => api.get(`/hr/drives/${driveId}/export?status=${encodeURIComponent(status)}`, { responseType: 'blob' });
 export const generateInterviewSlots = (driveId, data) => api.post(`/hr/drives/${driveId}/interview-slots/generate`, data);
 export const getInterviewSlots = (driveId) => api.get(`/hr/drives/${driveId}/interview-slots`);
+export const deleteInterviewSlot = (driveId, slotId) => api.delete(`/hr/drives/${driveId}/interview-slots/${slotId}`);
 
 // Notification API helpers (HR)
 export const getHRNotifications = () => api.get('/hr/notifications');

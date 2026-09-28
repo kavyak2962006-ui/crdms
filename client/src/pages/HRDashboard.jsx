@@ -36,6 +36,7 @@ import api, {
   updateApplicantStatus,
   generateInterviewSlots,
   getInterviewSlots,
+  deleteInterviewSlot,
   markNotificationRead,
   markAllNotificationsRead 
 } from '../services/api';
@@ -500,6 +501,19 @@ const HRDashboard = () => {
       alert(err.response?.data?.message || 'Failed to generate slots.');
     } finally {
       setInterviewGenLoading(false);
+    }
+  };
+
+  const handleDeleteSlot = async (driveId, slotId) => {
+    if (!window.confirm('Are you sure you want to delete this slot? If it is booked, the booking will be cancelled.')) return;
+    try {
+      setInterviewSlotsLoading(true);
+      const res = await deleteInterviewSlot(driveId, slotId);
+      fetchInterviewSlots(driveId);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to delete slot.');
+      setInterviewSlotsLoading(false);
     }
   };
 
@@ -1331,12 +1345,19 @@ const HRDashboard = () => {
                               ).map(([date, slots]) => (
                                 <div key={date} className="bg-slate-900/50 rounded-xl border border-slate-800 p-3">
                                   <h6 className="text-[11px] font-bold text-amber-300 mb-2 border-b border-slate-800 pb-1">
-                                    {new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                                   </h6>
                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                     {slots.map(slot => (
-                                      <div key={slot.id} className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-center shadow-sm">
-                                        <div className="text-[10px] text-white font-mono">
+                                      <div key={slot.id} className="group bg-slate-800 border border-slate-700 rounded-lg p-2 text-center shadow-sm relative">
+                                        <button 
+                                          onClick={() => handleDeleteSlot(job.id, slot.id)}
+                                          className="absolute top-1 right-1 p-1 bg-red-500/10 hover:bg-red-500/30 text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                          title="Delete Slot"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                        <div className="text-[10px] text-white font-mono mt-1">
                                           {slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)}
                                         </div>
                                         <div className="text-[9px] text-emerald-400 font-semibold mt-0.5">

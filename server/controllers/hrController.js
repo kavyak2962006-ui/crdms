@@ -816,7 +816,8 @@ const getInterviewSlots = async (req, res) => {
     }
 
     const [slots] = await pool.query(
-      `SELECT * FROM interview_slots 
+      `SELECT id, job_id, DATE_FORMAT(interview_date, '%Y-%m-%d') as interview_date, start_time, end_time, duration_minutes, status, created_at 
+       FROM interview_slots 
        WHERE job_id = ? 
        ORDER BY interview_date ASC, start_time ASC`,
       [id]
@@ -826,6 +827,39 @@ const getInterviewSlots = async (req, res) => {
   } catch (error) {
     console.error('Error fetching slots:', error);
     res.status(500).json({ message: 'Failed to fetch interview slots.' });
+  }
+};
+
+// Delete an Interview Slot
+const deleteInterviewSlot = async (req, res) => {
+  try {
+    const hrUserId = req.user.id;
+    const { id: driveId, slotId } = req.params;
+
+    // Verify drive ownership
+    const [driveRows] = await pool.query(
+      'SELECT id FROM job_postings WHERE id = ? AND hr_id = ?',
+      [driveId, hrUserId]
+    );
+
+    if (driveRows.length === 0) {
+      return res.status(404).json({ message: 'Placement drive not found or access denied.' });
+    }
+
+    // Attempt to delete slot (Cascades bookings if any, or we can restrict to Available only)
+    const [result] = await pool.query(
+      'DELETE FROM interview_slots WHERE id = ? AND job_id = ?',
+      [slotId, driveId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Slot not found.' });
+    }
+
+    res.status(200).json({ message: 'Slot deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting slot:', error);
+    res.status(500).json({ message: 'Failed to delete interview slot.' });
   }
 };
 
@@ -844,6 +878,7 @@ module.exports = {
   updateApplicantStatus,
   generateInterviewSlots,
   getInterviewSlots,
+  deleteInterviewSlot,
   computeDriveStatus,
   parseDriveEligibility
 };
