@@ -40,7 +40,7 @@ const getStudentDashboard = async (req, res) => {
 
     // Retrieve recent applications
     const [applications] = await pool.query(
-      `SELECT a.id, a.status, a.created_at, j.title, j.company
+      `SELECT a.id, a.job_id, a.status, a.created_at, j.title, j.company
        FROM applications a
        JOIN job_postings j ON a.job_id = j.id
        WHERE a.student_id = ?
@@ -499,6 +499,130 @@ const registerForDrive = async (req, res) => {
   }
 };
 
+// Get Available Interview Slots and Student's Booking
+const getAvailableInterviewSlots = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const driveId = req.params.driveId;
+
+    // Check if student has a shortlisted application for this drive
+    const [appRows] = await pool.query(
+      `SELECT id, status FROM applications 
+       WHERE student_id = ? AND job_id = ?`,
+      [studentId, driveId]
+    );
+
+    if (appRows.length === 0 || !['Shortlisted', 'Interview'].includes(appRows[0].status)) {
+      return res.status(403).json({ message: 'You must be shortlisted to view interview slots.' });
+    }
+
+    const applicationId = appRows[0].id;
+
+    // Fetch student's booking if any
+    const [bookingRows] = await pool.query(
+      `SELECT s.* FROM interview_slots s
+       JOIN interview_bookings b ON s.id = b.slot_id
+       WHERE b.application_id = ?`,
+      [applicationId]
+    );
+
+    const studentBooking = bookingRows.length > 0 ? bookingRows[0] : null;
+
+    // Fetch available slots
+    const [availableSlots] = await pool.query(
+      `SELECT * FROM interview_slots 
+       WHERE job_id = ? AND status = 'Available'
+       ORDER BY interview_date ASC, start_time ASC`,
+      [driveId]
+    );
+
+    res.status(200).json({
+      availableSlots,
+      studentBooking
+    });
+
+  } catch (error) {
+    console.error('Error fetching interview slots:', error);
+    res.status(500).json({ message: 'Failed to fetch interview slots.' });
+  }
+};
+
+// Book an Interview Slot
+const bookInterviewSlot = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const studentId = req.user.id;
+    const { driveId, slotId } = req.params;
+
+    // 1. Verify student application and status
+    const [appRows] = await connection.query(
+      `SELECT id, status FROM applications 
+       WHERE student_id = ? AND job_id = ?`,
+      [studentId, driveId]
+    );
+
+    if (appRows.length === 0 || !['Shortlisted', 'Interview'].includes(appRows[0].status)) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You must be shortlisted to book an interview.' });
+    }
+
+    const applicationId = appRows[0].id;
+
+    // 2. Verify slot exists, belongs to the drive, and is Available
+    const [slotRows] = await connection.query(
+      `SELECT id, status FROM interview_slots WHERE id = ? AND job_id = ? FOR UPDATE`,
+      [slotId, driveId]
+    );
+
+    if (slotRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Interview slot not found.' });
+    }
+
+    if (slotRows[0].status !== 'Available') {
+      await connection.rollback();
+      return res.status(409).json({ message: 'This interview slot has already been booked by another student.' });
+    }
+
+    // 3. Attempt Booking Insertion
+    try {
+      await connection.query(
+        `INSERT INTO interview_bookings (slot_id, student_id, application_id)
+         VALUES (?, ?, ?)`,
+        [slotId, studentId, applicationId]
+      );
+    } catch (err) {
+      // Catch UNIQUE constraint violation (either slot is booked or student already booked a slot)
+      await connection.rollback();
+      if (err.code === 'ER_DUP_ENTRY') {
+        if (err.message.includes('unique_student_app')) {
+          return res.status(409).json({ message: 'You have already booked an interview slot for this placement drive.' });
+        }
+        return res.status(409).json({ message: 'This interview slot has already been booked by another student.' });
+      }
+      throw err;
+    }
+
+    // 4. Update Slot Status
+    await connection.query(
+      `UPDATE interview_slots SET status = 'Booked' WHERE id = ?`,
+      [slotId]
+    );
+
+    await connection.commit();
+    res.status(200).json({ message: 'Interview slot booked successfully.' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error booking interview slot:', error);
+    res.status(500).json({ message: 'Failed to book interview slot.' });
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getStudentDashboard,
   getStudentProfile,
@@ -506,6 +630,8 @@ module.exports = {
   saveSecondaryProfile,
   getStudentDrives,
   registerForDrive,
-  checkStudentEligibility
+  checkStudentEligibility,
+  getAvailableInterviewSlots,
+  bookInterviewSlot
 };
 

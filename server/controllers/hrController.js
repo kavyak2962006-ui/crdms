@@ -716,6 +716,119 @@ const updateApplicantStatus = async (req, res) => {
   }
 };
 
+// Generate Interview Slots
+const generateInterviewSlots = async (req, res) => {
+  try {
+    const hrUserId = req.user.id;
+    const { id } = req.params;
+    const { interviewDate, startTime, endTime, slotDuration } = req.body;
+
+    // Basic validation
+    if (!interviewDate || !startTime || !endTime || !slotDuration) {
+      return res.status(400).json({ message: 'Missing required fields for slot generation.' });
+    }
+
+    const duration = parseInt(slotDuration, 10);
+    if (isNaN(duration) || duration <= 0) {
+      return res.status(400).json({ message: 'Slot duration must be a positive number.' });
+    }
+
+    // Parse times (using a dummy date to parse time safely)
+    const start = new Date(`2000-01-01T${startTime}`);
+    const end = new Date(`2000-01-01T${endTime}`);
+
+    if (start >= end) {
+      return res.status(400).json({ message: 'Start time must be before end time.' });
+    }
+
+    const totalMinutes = (end - start) / 60000;
+    if (duration > totalMinutes) {
+      return res.status(400).json({ message: 'Slot duration cannot be longer than the total time block.' });
+    }
+
+    // Verify drive ownership
+    const [driveRows] = await pool.query(
+      'SELECT id FROM job_postings WHERE id = ? AND hr_id = ?',
+      [id, hrUserId]
+    );
+
+    if (driveRows.length === 0) {
+      return res.status(404).json({ message: 'Placement drive not found or access denied.' });
+    }
+
+    // Generate slots
+    const slots = [];
+    let current = new Date(start);
+
+    while (current < end) {
+      const next = new Date(current.getTime() + duration * 60000);
+      
+      // Do not generate if it exceeds end time
+      if (next > end) {
+        break;
+      }
+
+      // Format time as HH:MM:SS
+      const sTime = current.toTimeString().split(' ')[0];
+      const eTime = next.toTimeString().split(' ')[0];
+
+      slots.push([id, interviewDate, sTime, eTime, duration, 'Available']);
+      current = next;
+    }
+
+    if (slots.length === 0) {
+      return res.status(400).json({ message: 'No valid slots could be generated with the given parameters.' });
+    }
+
+    // Insert slots (ignoring exact duplicates via INSERT IGNORE)
+    const [result] = await pool.query(
+      `INSERT IGNORE INTO interview_slots 
+       (job_id, interview_date, start_time, end_time, duration_minutes, status) 
+       VALUES ?`,
+      [slots]
+    );
+
+    res.status(200).json({
+      message: `${result.affectedRows} new interview slot(s) generated successfully.`,
+      generatedCount: result.affectedRows
+    });
+
+  } catch (error) {
+    console.error('Error generating slots:', error);
+    res.status(500).json({ message: 'Failed to generate interview slots.' });
+  }
+};
+
+// Get Interview Slots for a Drive
+const getInterviewSlots = async (req, res) => {
+  try {
+    const hrUserId = req.user.id;
+    const { id } = req.params;
+
+    // Verify drive ownership
+    const [driveRows] = await pool.query(
+      'SELECT id FROM job_postings WHERE id = ? AND hr_id = ?',
+      [id, hrUserId]
+    );
+
+    if (driveRows.length === 0) {
+      return res.status(404).json({ message: 'Placement drive not found or access denied.' });
+    }
+
+    const [slots] = await pool.query(
+      `SELECT * FROM interview_slots 
+       WHERE job_id = ? 
+       ORDER BY interview_date ASC, start_time ASC`,
+      [id]
+    );
+
+    res.status(200).json(slots);
+  } catch (error) {
+    console.error('Error fetching slots:', error);
+    res.status(500).json({ message: 'Failed to fetch interview slots.' });
+  }
+};
+
 module.exports = {
   getHRDashboard,
   getHRNotifications,
@@ -729,6 +842,8 @@ module.exports = {
   getDriveApplicants,
   exportCandidates,
   updateApplicantStatus,
+  generateInterviewSlots,
+  getInterviewSlots,
   computeDriveStatus,
   parseDriveEligibility
 };

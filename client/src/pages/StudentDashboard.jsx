@@ -14,14 +14,24 @@ import {
   Briefcase,
   AlertCircle,
   GraduationCap,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Clock
 } from 'lucide-react';
-import api from '../services/api';
+import api, { getAvailableInterviewSlots, bookInterviewSlot } from '../services/api';
 
 const StudentDashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Interview Booking State
+  const [expandedAppId, setExpandedAppId] = useState(null);
+  const [interviewData, setInterviewData] = useState({});
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -37,6 +47,44 @@ const StudentDashboard = () => {
       setError('Failed to load student dashboard data.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleInterviewPanel = async (appId, driveId) => {
+    if (expandedAppId === appId) {
+      setExpandedAppId(null);
+    } else {
+      setExpandedAppId(appId);
+      await fetchSlots(appId, driveId);
+    }
+  };
+
+  const fetchSlots = async (appId, driveId) => {
+    try {
+      setSlotsLoading(true);
+      const res = await getAvailableInterviewSlots(driveId);
+      setInterviewData(prev => ({ ...prev, [appId]: res.data }));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to fetch interview slots.');
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
+
+  const handleBookSlot = async (appId, driveId, slotId) => {
+    if (!window.confirm('Book this interview slot?')) return;
+    try {
+      setBookingLoading(slotId);
+      const res = await bookInterviewSlot(driveId, slotId);
+      alert(res.data.message);
+      await fetchSlots(appId, driveId); // Refresh after booking
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to book slot.');
+      await fetchSlots(appId, driveId); // Refresh to get updated status
+    } finally {
+      setBookingLoading(null);
     }
   };
 
@@ -223,14 +271,85 @@ const StudentDashboard = () => {
           {applications && applications.length > 0 ? (
             <div className="space-y-3">
               {applications.map((app) => (
-                <div key={app.id} className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold text-sm text-white">{app.title}</h4>
-                    <p className="text-xs text-slate-400">{app.company}</p>
+                <div key={app.id} className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm text-white">{app.title}</h4>
+                      <p className="text-xs text-slate-400">{app.company}</p>
+                    </div>
+                    <div className="flex flex-col items-end space-y-2">
+                      <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold">
+                        {app.status}
+                      </span>
+                      {/* Show booking button if shortlisted/interview */}
+                      {['Shortlisted', 'Interview'].includes(app.status) && app.job_id && (
+                        <button
+                          onClick={() => toggleInterviewPanel(app.id, app.job_id)}
+                          className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[10px] font-semibold border border-indigo-500/30 transition"
+                        >
+                          <Calendar className="w-3 h-3" />
+                          <span>Interview Booking</span>
+                          {expandedAppId === app.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold">
-                    {app.status}
-                  </span>
+
+                  {/* Interview Slot Panel */}
+                  {expandedAppId === app.id && (
+                    <div className="mt-2 pt-3 border-t border-slate-800/60 animate-in fade-in slide-in-from-top-2">
+                      <h5 className="text-[11px] font-bold text-indigo-300 mb-2 flex items-center space-x-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Available Interview Slots</span>
+                      </h5>
+                      
+                      {slotsLoading ? (
+                        <div className="flex justify-center p-4">
+                          <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {interviewData[app.id]?.studentBooking ? (
+                            <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl">
+                              <h6 className="text-[11px] font-semibold text-emerald-400 mb-1">My Interview Slot</h6>
+                              <div className="flex justify-between items-center text-[11px] text-emerald-200">
+                                <div>
+                                  <p>Date: {new Date(interviewData[app.id].studentBooking.interview_date).toLocaleDateString()}</p>
+                                  <p>Time: {interviewData[app.id].studentBooking.start_time.substring(0, 5)} - {interviewData[app.id].studentBooking.end_time.substring(0, 5)}</p>
+                                </div>
+                                <span className="px-2 py-1 bg-emerald-500/20 rounded font-bold uppercase tracking-wider text-[9px]">Booked</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {interviewData[app.id]?.availableSlots?.length > 0 ? (
+                                interviewData[app.id].availableSlots.map(slot => (
+                                  <div key={slot.id} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                                    <div className="text-[10px] text-slate-300 font-mono">
+                                      {new Date(slot.interview_date).toLocaleDateString()} <br/>
+                                      {slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)}
+                                    </div>
+                                    <button
+                                      onClick={() => handleBookSlot(app.id, app.job_id, slot.id)}
+                                      disabled={bookingLoading === slot.id}
+                                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold transition disabled:opacity-50 flex items-center space-x-1"
+                                    >
+                                      {bookingLoading === slot.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                      <span>Book</span>
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="col-span-full p-4 text-center text-[11px] text-slate-500 bg-slate-900/50 rounded-xl border border-slate-800/50">
+                                  No available slots at the moment.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

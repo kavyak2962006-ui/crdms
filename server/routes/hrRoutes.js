@@ -12,7 +12,9 @@ const {
   deleteHRDrive,
   getDriveApplicants,
   exportCandidates,
-  updateApplicantStatus
+  updateApplicantStatus,
+  generateInterviewSlots,
+  getInterviewSlots
 } = require('../controllers/hrController');
 const { getCompanyProfile, createCompanyProfile, updateCompanyProfile } = require('../controllers/companyController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
@@ -48,6 +50,8 @@ router.delete('/drives/:id', deleteHRDrive);
 router.get('/drives/:id/applicants', getDriveApplicants);
 router.put('/drives/:id/applicants/status', updateApplicantStatus);
 router.get('/drives/:id/export', exportCandidates);
+router.post('/drives/:id/interview-slots/generate', generateInterviewSlots);
+router.get('/drives/:id/interview-slots', getInterviewSlots);
 
 // Company profile routes (HR only)
 router.get('/company/profile', getCompanyProfile);

@@ -232,6 +232,36 @@ const initializeDatabase = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS interview_slots (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_id INT NOT NULL,
+        interview_date DATE NOT NULL,
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        duration_minutes INT NOT NULL,
+        status ENUM('Available', 'Booked', 'Completed', 'Cancelled') DEFAULT 'Available',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_slot (job_id, interview_date, start_time, end_time)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS interview_bookings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        slot_id INT NOT NULL,
+        student_id INT NOT NULL,
+        application_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (slot_id) REFERENCES interview_slots(id) ON DELETE CASCADE,
+        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_booking_slot (slot_id),
+        UNIQUE KEY unique_student_app (application_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+    `);
+
   } catch (error) {
     console.error('MySQL connection error:', error.message);
   }

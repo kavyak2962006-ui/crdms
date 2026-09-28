@@ -51,6 +51,8 @@ export const deleteHRDrive = (id) => api.delete(`/hr/drives/${id}`);
 export const getDriveApplicants = (driveId) => api.get(`/hr/drives/${driveId}/applicants`);
 export const updateApplicantStatus = (driveId, data) => api.put(`/hr/drives/${driveId}/applicants/status`, data);
 export const exportCandidates = (driveId, status) => api.get(`/hr/drives/${driveId}/export?status=${encodeURIComponent(status)}`, { responseType: 'blob' });
+export const generateInterviewSlots = (driveId, data) => api.post(`/hr/drives/${driveId}/interview-slots/generate`, data);
+export const getInterviewSlots = (driveId) => api.get(`/hr/drives/${driveId}/interview-slots`);
 
 // Notification API helpers (HR)
 export const getHRNotifications = () => api.get('/hr/notifications');
@@ -60,6 +62,8 @@ export const markAllNotificationsRead = () => api.put('/hr/notifications/mark-al
 // Placement Drive API helpers (Student)
 export const getStudentDrives = () => api.get('/student/drives');
 export const registerForDrive = (id) => api.post(`/student/drives/${id}/register`);
+export const getAvailableInterviewSlots = (id) => api.get(`/student/drives/${id}/interview-slots`);
+export const bookInterviewSlot = (id, slotId) => api.post(`/student/drives/${id}/interview-slots/${slotId}/book`);
 
 // Placement Drive API helpers (Admin)
 export const getAdminDrives = () => api.get('/admin/drives');

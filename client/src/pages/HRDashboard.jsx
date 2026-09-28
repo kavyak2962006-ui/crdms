@@ -34,6 +34,8 @@ import api, {
   getDriveApplicants,
   exportCandidates,
   updateApplicantStatus,
+  generateInterviewSlots,
+  getInterviewSlots,
   markNotificationRead,
   markAllNotificationsRead 
 } from '../services/api';
@@ -89,6 +91,13 @@ const HRDashboard = () => {
   const [selectedApplicants, setSelectedApplicants] = useState([]);
   const [bulkStatus, setBulkStatus] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Interview Scheduling state
+  const [expandedInterviewDriveId, setExpandedInterviewDriveId] = useState(null);
+  const [interviewSlotsData, setInterviewSlotsData] = useState({});
+  const [interviewSlotsLoading, setInterviewSlotsLoading] = useState(false);
+  const [interviewGenData, setInterviewGenData] = useState({});
+  const [interviewGenLoading, setInterviewGenLoading] = useState(false);
 
   useEffect(() => {
     fetchHRDashboard();
@@ -441,12 +450,56 @@ const HRDashboard = () => {
   const toggleApplicants = (driveId) => {
     setSelectedApplicants([]);
     setBulkStatus('');
+    setExpandedInterviewDriveId(null);
     if (expandedDriveId === driveId) {
       setExpandedDriveId(null);
       setApplicantsError('');
     } else {
       setExpandedDriveId(driveId);
       fetchApplicants(driveId);
+    }
+  };
+
+  const fetchInterviewSlots = async (driveId) => {
+    try {
+      setInterviewSlotsLoading(true);
+      const res = await getInterviewSlots(driveId);
+      setInterviewSlotsData(prev => ({ ...prev, [driveId]: res.data }));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to fetch interview slots.');
+    } finally {
+      setInterviewSlotsLoading(false);
+    }
+  };
+
+  const toggleInterviews = (driveId) => {
+    setExpandedDriveId(null);
+    if (expandedInterviewDriveId === driveId) {
+      setExpandedInterviewDriveId(null);
+    } else {
+      setExpandedInterviewDriveId(driveId);
+      fetchInterviewSlots(driveId);
+    }
+  };
+
+  const handleGenerateSlots = async (driveId) => {
+    const data = interviewGenData[driveId];
+    if (!data?.interviewDate || !data?.startTime || !data?.endTime || !data?.slotDuration) {
+      alert('Please fill all fields to generate slots.');
+      return;
+    }
+    try {
+      setInterviewGenLoading(true);
+      const res = await generateInterviewSlots(driveId, data);
+      alert(res.data.message);
+      setInterviewGenData(prev => ({ ...prev, [driveId]: {} }));
+      fetchInterviewSlots(driveId);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to generate slots.');
+    } finally {
+      setInterviewGenLoading(false);
     }
   };
 
@@ -978,17 +1031,27 @@ const HRDashboard = () => {
                       </div>
                     </div>
 
-                    {/* View Applicants Button */}
-                    <div className="pt-2 border-t border-slate-800/60">
+                    {/* View Applicants & Interview Buttons */}
+                    <div className="pt-2 border-t border-slate-800/60 flex flex-col sm:flex-row gap-2">
                       <button
                         onClick={() => toggleApplicants(job.id)}
-                        className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20 text-indigo-300 text-xs font-semibold transition"
+                        className="flex-1 flex items-center justify-between px-4 py-2.5 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20 text-indigo-300 text-xs font-semibold transition"
                       >
                         <span className="flex items-center space-x-2">
                           <Users className="w-4 h-4" />
                           <span>View Applicants ({job.applications_count || 0})</span>
                         </span>
                         {expandedDriveId === job.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => toggleInterviews(job.id)}
+                        className="flex-1 flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 text-amber-300 text-xs font-semibold transition"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <Calendar className="w-4 h-4" />
+                          <span>Interview Scheduling</span>
+                        </span>
+                        {expandedInterviewDriveId === job.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
                     </div>
 
@@ -1176,6 +1239,122 @@ const HRDashboard = () => {
                             <p className="text-[10px] text-slate-600 mt-1">Applicants will appear here as students apply.</p>
                           </div>
                         ) : null}
+                      </div>
+                    )}
+
+                    {/* Expandable Interview Scheduling Panel */}
+                    {expandedInterviewDriveId === job.id && (
+                      <div className="mt-2 p-4 rounded-2xl bg-slate-950/80 border border-amber-500/15 space-y-4 animate-in">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-bold text-white flex items-center space-x-1.5">
+                            <Calendar className="w-4 h-4 text-amber-400" />
+                            <span>Interview Scheduling</span>
+                          </h5>
+                          <button
+                            onClick={() => fetchInterviewSlots(job.id)}
+                            disabled={interviewSlotsLoading}
+                            className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold transition border border-slate-700 disabled:opacity-50"
+                          >
+                            {interviewSlotsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                            <span>Refresh Slots</span>
+                          </button>
+                        </div>
+                        
+                        {/* Time Block Generation Form */}
+                        <div className="p-3 bg-amber-950/20 border border-amber-500/20 rounded-xl space-y-3">
+                          <h6 className="text-[11px] font-semibold text-amber-300">Create Time Block</h6>
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-[10px] text-slate-400 mb-1">Date</label>
+                              <input 
+                                type="date" 
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[11px] text-white"
+                                value={interviewGenData[job.id]?.interviewDate || ''}
+                                onChange={e => setInterviewGenData(prev => ({...prev, [job.id]: {...prev[job.id], interviewDate: e.target.value}}))}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-400 mb-1">Start Time</label>
+                              <input 
+                                type="time" 
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[11px] text-white"
+                                value={interviewGenData[job.id]?.startTime || ''}
+                                onChange={e => setInterviewGenData(prev => ({...prev, [job.id]: {...prev[job.id], startTime: e.target.value}}))}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-400 mb-1">End Time</label>
+                              <input 
+                                type="time" 
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[11px] text-white"
+                                value={interviewGenData[job.id]?.endTime || ''}
+                                onChange={e => setInterviewGenData(prev => ({...prev, [job.id]: {...prev[job.id], endTime: e.target.value}}))}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-400 mb-1">Duration (mins)</label>
+                              <div className="flex space-x-2">
+                                <input 
+                                  type="number" 
+                                  placeholder="30"
+                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-[11px] text-white"
+                                  value={interviewGenData[job.id]?.slotDuration || ''}
+                                  onChange={e => setInterviewGenData(prev => ({...prev, [job.id]: {...prev[job.id], slotDuration: e.target.value}}))}
+                                />
+                                <button
+                                  onClick={() => handleGenerateSlots(job.id)}
+                                  disabled={interviewGenLoading}
+                                  className="bg-amber-600 hover:bg-amber-500 text-white rounded-lg px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
+                                >
+                                  {interviewGenLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Generate'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Generated Slots Calendar View */}
+                        <div className="space-y-2">
+                          <h6 className="text-[11px] font-semibold text-slate-300 flex justify-between">
+                            <span>Generated Slots Calendar</span>
+                            <span className="text-amber-400">Total: {interviewSlotsData[job.id]?.length || 0}</span>
+                          </h6>
+                          {interviewSlotsData[job.id]?.length > 0 ? (
+                            <div className="max-h-60 overflow-y-auto pr-1 space-y-4">
+                              {Object.entries(
+                                interviewSlotsData[job.id].reduce((acc, slot) => {
+                                  const date = slot.interview_date.split('T')[0];
+                                  if (!acc[date]) acc[date] = [];
+                                  acc[date].push(slot);
+                                  return acc;
+                                }, {})
+                              ).map(([date, slots]) => (
+                                <div key={date} className="bg-slate-900/50 rounded-xl border border-slate-800 p-3">
+                                  <h6 className="text-[11px] font-bold text-amber-300 mb-2 border-b border-slate-800 pb-1">
+                                    {new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </h6>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    {slots.map(slot => (
+                                      <div key={slot.id} className="bg-slate-800 border border-slate-700 rounded-lg p-2 text-center shadow-sm">
+                                        <div className="text-[10px] text-white font-mono">
+                                          {slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)}
+                                        </div>
+                                        <div className="text-[9px] text-emerald-400 font-semibold mt-0.5">
+                                          {slot.status}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 text-slate-500 border border-slate-800 border-dashed rounded-xl">
+                              <Calendar className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                              <p className="text-[11px]">No interview slots generated yet.</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

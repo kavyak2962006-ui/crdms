@@ -6,7 +6,9 @@ const {
   getSecondaryProfile, 
   saveSecondaryProfile,
   getStudentDrives,
-  registerForDrive
+  registerForDrive,
+  getAvailableInterviewSlots,
+  bookInterviewSlot
 } = require('../controllers/studentController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 const { upload } = require('../middleware/upload');
@@ -23,5 +25,8 @@ router.get('/profile', getStudentProfile);
 // Placement Drive routes for students
 router.get('/drives', getStudentDrives);
 router.post('/drives/:id/register', registerForDrive);
+
+router.get('/drives/:driveId/interview-slots', getAvailableInterviewSlots);
+router.post('/drives/:driveId/interview-slots/:slotId/book', bookInterviewSlot);
 
 module.exports = router;
