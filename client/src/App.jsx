@@ -21,6 +21,7 @@ import DashboardLayout from './components/DashboardLayout';
 import UserRoleManagement from './pages/UserRoleManagement';
 import HRApproval from './pages/HRApproval';
 import CompanyProfile from './pages/CompanyProfile';
+import SettingsPage from './pages/SettingsPage';
 
 // Guard Component
 import ProtectedRoute from './components/ProtectedRoute';
@@ -60,6 +61,11 @@ function App() {
           <Route path="/admin/drives" element={<AdminDrives />} />
           <Route path="/admin/hr-approval" element={<HRApproval />} />
           <Route path="/admin/users" element={<UserRoleManagement />} />
+        </Route>
+
+        {/* Global Settings Route */}
+        <Route element={<ProtectedRoute allowedRoles={['student', 'hr', 'tpo', 'admin']} />}>
+          <Route path="/settings" element={<DashboardLayout pageTitle="Settings"><SettingsPage /></DashboardLayout>} />
         </Route>
 
         {/* Catch-all Fallback */}

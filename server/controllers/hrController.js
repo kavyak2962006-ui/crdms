@@ -298,7 +298,7 @@ const createPlacementDrive = async (req, res) => {
         const { checkStudentEligibility } = require('./studentController');
         
         const [students] = await pool.query(
-          `SELECT u.id as user_id, u.email, u.name, sp.department, sp.year, sp.cgpa, sp.arrear_history
+          `SELECT u.id as user_id, u.email, u.name, sp.department, sp.year, sp.cgpa, sp.arrear_history, u.new_drive_alerts
            FROM users u
            JOIN student_profiles sp ON u.id = sp.user_id
            WHERE u.role = 'student' AND u.status = 'active'`
@@ -306,7 +306,7 @@ const createPlacementDrive = async (req, res) => {
 
         for (const student of students) {
           const eligibility = checkStudentEligibility(student, createdDrive);
-          if (eligibility.eligible) {
+          if (eligibility.eligible && student.new_drive_alerts) {
             await pool.query(
               `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
               [
@@ -743,7 +743,7 @@ const updateApplicantStatus = async (req, res) => {
     // Find applications that will actually change
     const placeholders = applicationIds.map(() => '?').join(',');
     const [apps] = await connection.query(
-      `SELECT a.id, a.student_id, a.status as old_status, u.email, u.name
+      `SELECT a.id, a.student_id, a.status as old_status, u.email, u.name, u.application_status_alerts
        FROM applications a
        JOIN users u ON a.student_id = u.id
        WHERE a.job_id = ? AND a.id IN (${placeholders})`,
@@ -771,25 +771,29 @@ const updateApplicantStatus = async (req, res) => {
     );
 
     for (const app of changingApps) {
-      await connection.query(
-        `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
-        [
-          app.student_id,
-          'Application Status Updated',
-          `Your application for ${drive.company} - ${drive.title} has moved to the ${status} stage.`
-        ]
-      );
+      if (app.application_status_alerts) {
+        await connection.query(
+          `INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)`,
+          [
+            app.student_id,
+            'Application Status Updated',
+            `Your application for ${drive.company} - ${drive.title} has moved to the ${status} stage.`
+          ]
+        );
+      }
     }
 
     await connection.commit();
 
     for (const app of changingApps) {
-      sendEmail(
-        app.email,
-        'CRDM – Application Status Updated',
-        `Hello ${app.name},\n\nYour application status for:\nCompany: ${drive.company}\nPlacement Drive: ${drive.title}\n\nhas been updated to:\n${status}\n\nPlease log in to the CRDM portal for more details.\n\nRegards,\nCRDM Placement System`,
-        `<p>Hello ${app.name},</p><p>Your application status for:</p><p><b>Company:</b> ${drive.company}<br><b>Placement Drive:</b> ${drive.title}</p><p>has been updated to: <b>${status}</b></p><p>Please log in to the CRDM portal for more details.</p><p>Regards,<br>CRDM Placement System</p>`
-      ).catch(() => {});
+      if (app.application_status_alerts) {
+        sendEmail(
+          app.email,
+          'CRDM – Application Status Updated',
+          `Hello ${app.name},\n\nYour application status for:\nCompany: ${drive.company}\nPlacement Drive: ${drive.title}\n\nhas been updated to:\n${status}\n\nPlease log in to the CRDM portal for more details.\n\nRegards,\nCRDM Placement System`,
+          `<p>Hello ${app.name},</p><p>Your application status for:</p><p><b>Company:</b> ${drive.company}<br><b>Placement Drive:</b> ${drive.title}</p><p>has been updated to: <b>${status}</b></p><p>Please log in to the CRDM portal for more details.</p><p>Regards,<br>CRDM Placement System</p>`
+        ).catch(() => {});
+      }
     }
 
     res.status(200).json({

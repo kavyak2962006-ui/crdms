@@ -16,19 +16,10 @@ import {
   GraduationCap,
   ShieldCheck,
   ChevronDown,
-  ChevronUp,
   Loader2,
-  Clock,
-  Bell,
-  BellRing
+  Clock
 } from 'lucide-react';
-import api, { 
-  getAvailableInterviewSlots, 
-  bookInterviewSlot,
-  getStudentNotifications,
-  markStudentNotificationRead,
-  markAllStudentNotificationsRead
-} from '../services/api';
+import api, { getAvailableInterviewSlots, bookInterviewSlot } from '../services/api';
 
 const StudentDashboard = () => {
   const [data, setData] = useState(null);
@@ -41,21 +32,9 @@ const StudentDashboard = () => {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(null);
 
-  const [notifications, setNotifications] = useState([]);
-
   useEffect(() => {
     fetchDashboardData();
-    fetchNotifications();
   }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await getStudentNotifications();
-      setNotifications(res.data);
-    } catch (err) {
-      console.error('Failed to fetch notifications');
-    }
-  };
 
   const fetchDashboardData = async () => {
     try {
@@ -105,24 +84,6 @@ const StudentDashboard = () => {
       await fetchSlots(appId, driveId); // Refresh to get updated status
     } finally {
       setBookingLoading(null);
-    }
-  };
-
-  const handleMarkAsRead = async (id) => {
-    try {
-      await markStudentNotificationRead(id);
-      fetchNotifications();
-    } catch (err) {
-      console.error("Failed to mark as read");
-    }
-  };
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      await markAllStudentNotificationsRead();
-      fetchNotifications();
-    } catch (err) {
-      console.error("Failed to mark all as read");
     }
   };
 
@@ -267,48 +228,6 @@ const StudentDashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Notifications Section */}
-      {notifications.length > 0 && (
-        <div className="glass-card p-6 rounded-3xl border border-slate-800 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-base text-white flex items-center gap-2">
-              <BellRing className="w-5 h-5 text-amber-400" /> Notifications
-              {notifications.filter(n => !n.is_read).length > 0 && (
-                <span className="bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {notifications.filter(n => !n.is_read).length} New
-                </span>
-              )}
-            </h3>
-            {notifications.filter(n => !n.is_read).length > 0 && (
-              <button 
-                onClick={handleMarkAllAsRead}
-                className="text-xs text-indigo-400 font-semibold hover:text-indigo-300"
-              >
-                Mark all as read
-              </button>
-            )}
-          </div>
-          <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-            {notifications.map(notif => (
-              <div 
-                key={notif.id} 
-                className={`p-4 rounded-2xl border flex items-start justify-between cursor-pointer transition-colors ${notif.is_read ? 'bg-slate-900/40 border-slate-800/50' : 'bg-slate-800/60 border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.1)]'}`}
-                onClick={() => !notif.is_read && handleMarkAsRead(notif.id)}
-              >
-                <div>
-                  <h4 className={`text-sm font-bold ${notif.is_read ? 'text-slate-300' : 'text-white'}`}>{notif.title}</h4>
-                  <p className={`text-xs mt-1 ${notif.is_read ? 'text-slate-400' : 'text-indigo-200'}`}>{notif.message}</p>
-                  <p className="text-[10px] text-slate-500 mt-2">{new Date(notif.created_at).toLocaleString()}</p>
-                </div>
-                {!notif.is_read && (
-                  <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1 flex-shrink-0 animate-pulse"></div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Main Content Sections: Upcoming Drives & Application History */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

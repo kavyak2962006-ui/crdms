@@ -9,7 +9,8 @@ import {
   Building2, 
   ShieldCheck, 
   X,
-  FileText
+  FileText,
+  Settings
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -25,15 +26,18 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           { name: 'Placement Drives', path: '/admin/drives', icon: Briefcase },
           { name: 'HR Approvals', path: '/admin/hr-approval', icon: CheckCircle2 },
           { name: 'User Management', path: '/admin/users', icon: Users },
+          { name: 'Settings', path: '/settings', icon: Settings },
         ];
       case 'hr':
         return [
           { name: 'Dashboard', path: '/hr/dashboard', icon: LayoutDashboard },
           { name: 'Company Profile', path: '/hr/company-profile', icon: Building2 },
+          { name: 'Settings', path: '/settings', icon: Settings },
         ];
       case 'tpo':
         return [
           { name: 'Dashboard', path: '/tpo/dashboard', icon: LayoutDashboard },
+          { name: 'Settings', path: '/settings', icon: Settings },
         ];
       case 'student':
       default:
@@ -41,6 +45,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           { name: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
           { name: 'Placement Drives', path: '/student/drives', icon: Briefcase },
           { name: 'Secondary Profile', path: '/student/secondary-profile', icon: FileText },
+          { name: 'Settings', path: '/settings', icon: Settings },
         ];
     }
   };

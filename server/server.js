@@ -11,6 +11,7 @@ const studentRoutes = require('./routes/studentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const hrRoutes = require('./routes/hrRoutes');
 const tpoRoutes = require('./routes/tpoRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,15 @@ app.use('/api/student', studentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/tpo', tpoRoutes);
+app.use('/api/settings', settingsRoutes);
+
+// Static file serving for uploads (profile pictures, etc)
+const path = require('path');
+const fs = require('fs');
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Root route
 app.get('/', (req, res) => {

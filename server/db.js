@@ -50,6 +50,29 @@ const initializeDatabase = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
     `);
 
+    // Ensure settings columns exist in users table
+    try {
+      const [uCols] = await pool.query(`SHOW COLUMNS FROM users`);
+      const uColNames = uCols.map(c => c.Field);
+      
+      const colsToAdd = [
+        { name: 'phone', type: 'VARCHAR(20) DEFAULT NULL' },
+        { name: 'profile_picture', type: 'VARCHAR(255) DEFAULT NULL' },
+        { name: 'new_drive_alerts', type: 'BOOLEAN DEFAULT TRUE' },
+        { name: 'application_status_alerts', type: 'BOOLEAN DEFAULT TRUE' },
+        { name: 'interview_alerts', type: 'BOOLEAN DEFAULT TRUE' }
+      ];
+
+      for (const col of colsToAdd) {
+        if (!uColNames.includes(col.name)) {
+          await pool.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type};`);
+          console.log(`Added ${col.name} column to users`);
+        }
+      }
+    } catch (migErr) {
+      console.error('Error checking/migrating users columns:', migErr.message);
+    }
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS student_profiles (
         id INT AUTO_INCREMENT PRIMARY KEY,

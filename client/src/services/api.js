@@ -75,3 +75,11 @@ export const markAllStudentNotificationsRead = () => api.put('/student/notificat
 export const getAdminDrives = () => api.get('/admin/drives');
 export const updateAdminDriveTimeline = (id, data) => api.put(`/admin/drives/${id}/timeline`, data);
 
+// Settings APIs
+export const getSettings = () => api.get('/settings');
+export const updateProfile = (data) => api.put('/settings/profile', data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const updateNotifications = (data) => api.put('/settings/notifications', data);
+
+export default api;
