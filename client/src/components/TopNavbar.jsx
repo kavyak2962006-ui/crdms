@@ -12,7 +12,7 @@ const TopNavbar = ({ toggleSidebar, pageTitle = "Dashboard" }) => {
 
   useEffect(() => {
     fetchNotifications();
-  }, [user]);
+  }, [user?.id]);
 
   const fetchNotifications = () => {
     if (user && user.role === 'hr') {

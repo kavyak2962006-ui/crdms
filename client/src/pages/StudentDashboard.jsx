@@ -16,6 +16,7 @@ import {
   GraduationCap,
   ShieldCheck,
   ChevronDown,
+  ChevronUp,
   Loader2,
   Clock
 } from 'lucide-react';

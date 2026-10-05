@@ -167,7 +167,7 @@ const SettingsPage = () => {
                 type="file" 
                 ref={fileInputRef} 
                 onChange={handleImageChange} 
-                accept="image/png, image/jpeg, image/webp" 
+                accept="image/png, image/jpeg, image/jpg, image/webp" 
                 className="hidden" 
               />
             </div>

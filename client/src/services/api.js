@@ -81,5 +81,3 @@ export const updateProfile = (data) => api.put('/settings/profile', data, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });
 export const updateNotifications = (data) => api.put('/settings/notifications', data);
-
-export default api;
