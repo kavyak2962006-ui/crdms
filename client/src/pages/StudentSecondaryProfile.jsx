@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import api from "../services/api";
-import { AlertCircle, CheckCircle, Info, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle, Info, FileText, X, Sparkles, Loader2 } from "lucide-react";
 
 const StudentSecondaryProfile = () => {
-  const [skills, setSkills] = useState("");
+  const [skills, setSkills] = useState([]);
+  const [newSkill, setNewSkill] = useState("");
   const [projects, setProjects] = useState("");
   const [resumeFile, setResumeFile] = useState(null);
   const [resumeName, setResumeName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
   // Store original values for cancel
@@ -18,7 +20,8 @@ const StudentSecondaryProfile = () => {
     try {
       const res = await api.get("/student/secondary-profile");
       const data = res.data;
-      setSkills(data.skills || "");
+      const initialSkills = data.skills ? data.skills.split(',').map(s => s.trim()).filter(Boolean) : [];
+      setSkills(initialSkills);
       setProjects(data.projects || "");
       // backend sends resume_path; extract filename
       const filename = data.resume_path ? data.resume_path.split("/").pop() : "";
@@ -59,7 +62,7 @@ const StudentSecondaryProfile = () => {
     setMessage({ type: "", text: "" });
     try {
       const form = new FormData();
-      form.append("skills", skills);
+      form.append("skills", skills.join(", "));
       form.append("projects", projects);
       if (resumeFile) {
         form.append("resume", resumeFile);
@@ -85,11 +88,65 @@ const StudentSecondaryProfile = () => {
 
   const handleCancel = () => {
     const { skills: origSkills, projects: origProjects, resumeName: origResumeName } = original.current;
-    setSkills(origSkills);
+    setSkills(origSkills ? origSkills.split(',').map(s => s.trim()).filter(Boolean) : []);
+    setNewSkill("");
     setProjects(origProjects);
     setResumeName(origResumeName);
     setResumeFile(null);
     setMessage({ type: "", text: "" });
+  };
+
+  const handleAddSkill = (e) => {
+    if (e.key === 'Enter' || e.type === 'click') {
+      e.preventDefault();
+      const skill = newSkill.trim();
+      if (skill && !skills.includes(skill)) {
+        setSkills([...skills, skill]);
+      }
+      setNewSkill("");
+    }
+  };
+
+  const handleRemoveSkill = (skillToRemove) => {
+    setSkills(skills.filter(s => s !== skillToRemove));
+  };
+
+  const handleExtractSkills = async () => {
+    if (!resumeFile) {
+      setMessage({ type: "error", text: "Please select a PDF resume file to extract skills." });
+      return;
+    }
+
+    setExtracting(true);
+    setMessage({ type: "", text: "" });
+
+    try {
+      const form = new FormData();
+      form.append("resume", resumeFile);
+
+      const res = await api.post("/student/resume/extract-skills", form, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+
+      if (res.data.skills && res.data.skills.length > 0) {
+        const extracted = res.data.skills;
+        setSkills(prev => {
+          const newSkills = [...prev];
+          extracted.forEach(s => {
+            if (!newSkills.includes(s)) newSkills.push(s);
+          });
+          return newSkills;
+        });
+        setMessage({ type: "success", text: `Successfully extracted ${extracted.length} skill(s). Please review and save.` });
+      } else {
+        setMessage({ type: "error", text: "No technical skills were recognized from the PDF." });
+      }
+    } catch (err) {
+      console.error("Extraction error:", err);
+      setMessage({ type: "error", text: "Failed to extract skills. Ensure it is a readable PDF." });
+    } finally {
+      setExtracting(false);
+    }
   };
 
   return (
@@ -130,14 +187,38 @@ const StudentSecondaryProfile = () => {
         {/* Skills Section */}
         <div className="glass-card p-6 rounded-3xl border border-slate-800">
           <label className="block text-sm font-semibold text-slate-200 mb-2">Technical Skills</label>
-          <p className="text-xs text-slate-400 mb-3">List your programming languages, frameworks, databases, and developer tools.</p>
-          <textarea
-            className="w-full rounded-2xl bg-slate-900/60 border border-slate-800 text-white p-3.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none placeholder-slate-500"
-            rows={3}
-            placeholder="e.g. Java, Python, React, Node.js, MySQL, Docker"
-            value={skills}
-            onChange={(e) => setSkills(e.target.value)}
-          />
+          <p className="text-xs text-slate-400 mb-4">List your programming languages, frameworks, databases, and developer tools. Type and press enter to add.</p>
+          
+          <div className="flex flex-wrap gap-2 mb-4">
+            {skills.map(skill => (
+              <span key={skill} className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold">
+                <span>{skill}</span>
+                <button 
+                  onClick={() => handleRemoveSkill(skill)}
+                  className="hover:text-white transition focus:outline-none"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              className="flex-1 rounded-xl bg-slate-900/60 border border-slate-800 text-white px-4 py-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition placeholder-slate-500"
+              placeholder="Add a skill... (e.g. React, Node.js)"
+              value={newSkill}
+              onChange={(e) => setNewSkill(e.target.value)}
+              onKeyDown={handleAddSkill}
+            />
+            <button
+              onClick={handleAddSkill}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition"
+            >
+              Add
+            </button>
+          </div>
         </div>
 
         {/* Projects Section */}
@@ -163,7 +244,7 @@ const StudentSecondaryProfile = () => {
           <div className="flex flex-wrap items-center gap-4">
             <label
               htmlFor="resume-upload"
-              className="cursor-pointer inline-flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/20 transition"
+              className="cursor-pointer inline-flex items-center space-x-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition"
             >
               <FileText className="w-4 h-4" />
               <span>{resumeName ? "Replace Resume" : "Upload PDF Resume"}</span>
@@ -171,6 +252,18 @@ const StudentSecondaryProfile = () => {
             <span className="text-xs text-slate-400 font-mono">
               {resumeName ? `Current file: ${resumeName}` : "No file selected"}
             </span>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-800/60">
+            <button
+              onClick={handleExtractSkills}
+              disabled={extracting || !resumeFile}
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold rounded-xl transition disabled:opacity-50"
+            >
+              {extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span>{extracting ? "Extracting Skills..." : "Auto-Extract Skills from PDF"}</span>
+            </button>
+            <p className="text-[10px] text-slate-500 mt-2">Upload a new PDF to auto-extract technical skills. Please review before saving.</p>
           </div>
           <input
             id="resume-upload"

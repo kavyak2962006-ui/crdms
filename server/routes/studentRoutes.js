@@ -11,7 +11,8 @@ const {
   bookInterviewSlot,
   getNotifications,
   markNotificationRead,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  extractSkillsFromResume
 } = require('../controllers/studentController');
 const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 const { upload } = require('../middleware/upload');
@@ -21,6 +22,7 @@ router.use(authorizeRoles('student'));
 
 router.get('/secondary-profile', getSecondaryProfile);
 router.post('/secondary-profile', upload.single('resume'), saveSecondaryProfile);
+router.post('/resume/extract-skills', upload.single('resume'), extractSkillsFromResume);
 
 router.get('/dashboard', getStudentDashboard);
 router.get('/profile', getStudentProfile);

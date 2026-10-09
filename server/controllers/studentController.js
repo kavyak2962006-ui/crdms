@@ -1,6 +1,9 @@
 const { pool } = require('../db');
 const path = require('path');
+const fs = require('fs');
+const pdfParse = require('pdf-parse');
 const { calculateFitScore } = require('../utils/aiScoring');
+const { extractTechnicalSkills } = require('../utils/nlpExtractor');
 
 const getStudentDashboard = async (req, res) => {
   try {
@@ -680,6 +683,42 @@ const markAllNotificationsRead = async (req, res) => {
   }
 };
 
+// Extract technical skills from uploaded resume
+const extractSkillsFromResume = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No resume file uploaded.' });
+    }
+    if (req.file.mimetype !== 'application/pdf') {
+      // In case frontend validation was bypassed
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Only PDF files are supported.' });
+    }
+
+    const dataBuffer = fs.readFileSync(req.file.path);
+    const data = await pdfParse(dataBuffer);
+    
+    if (!data.text || data.text.trim().length === 0) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Could not extract text from PDF. Ensure it is a text-based PDF.' });
+    }
+
+    const skills = extractTechnicalSkills(data.text);
+    
+    // Cleanup temporary file since it's just for extraction. 
+    // The actual save will happen via a different upload when user hits Save.
+    fs.unlinkSync(req.file.path);
+
+    res.status(200).json({ success: true, skills });
+  } catch (error) {
+    console.error('Error extracting skills:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: 'Failed to process resume PDF.' });
+  }
+};
+
 module.exports = {
   getStudentDashboard,
   getStudentProfile,
@@ -692,6 +731,7 @@ module.exports = {
   bookInterviewSlot,
   getNotifications,
   markNotificationRead,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  extractSkillsFromResume
 };
 
