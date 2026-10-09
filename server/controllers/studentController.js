@@ -1,5 +1,6 @@
 const { pool } = require('../db');
 const path = require('path');
+const { calculateFitScore } = require('../utils/aiScoring');
 
 const getStudentDashboard = async (req, res) => {
   try {
@@ -468,10 +469,15 @@ const registerForDrive = async (req, res) => {
       return res.status(400).json({ message: 'You have already registered for this placement drive.' });
     }
 
+    // Calculate AI Fit Score
+    const jdText = [drive.description, drive.required_skills].filter(Boolean).join(' ');
+    const studentText = studentProfile.skills || '';
+    const fitScore = calculateFitScore(studentText, jdText);
+
     // Insert registration
     await pool.query(
-      `INSERT INTO applications (student_id, job_id, status, created_at) VALUES (?, ?, 'Applied', NOW())`,
-      [userId, id]
+      `INSERT INTO applications (student_id, job_id, status, ai_fit_score, created_at) VALUES (?, ?, 'Applied', ?, NOW())`,
+      [userId, id, fitScore]
     );
 
     // Notify HR of the new application if drive has an HR owner

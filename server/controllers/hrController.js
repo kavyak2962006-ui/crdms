@@ -576,6 +576,7 @@ const getDriveApplicants = async (req, res) => {
       `SELECT
         a.id AS application_id,
         a.status AS application_status,
+        a.ai_fit_score,
         a.created_at AS applied_at,
         u.id AS user_id,
         u.name AS student_name,

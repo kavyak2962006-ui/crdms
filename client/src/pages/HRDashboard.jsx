@@ -92,6 +92,16 @@ const HRDashboard = () => {
   const [selectedApplicants, setSelectedApplicants] = useState([]);
   const [bulkStatus, setBulkStatus] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [aiScoreSort, setAiScoreSort] = useState({ driveId: null, order: 'desc' });
+
+  const handleAiScoreSort = (driveId) => {
+    setAiScoreSort(prev => {
+      if (prev.driveId === driveId) {
+        return { driveId, order: prev.order === 'desc' ? 'asc' : 'desc' };
+      }
+      return { driveId, order: 'desc' };
+    });
+  };
 
   // Interview Scheduling state
   const [expandedInterviewDriveId, setExpandedInterviewDriveId] = useState(null);
@@ -1180,13 +1190,35 @@ const HRDashboard = () => {
                                   <th className="px-3 py-2.5 text-left font-semibold">CGPA</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Arrears</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Skills</th>
+                                  <th 
+                                    className="px-3 py-2.5 text-left font-semibold cursor-pointer hover:bg-slate-800/50 transition"
+                                    onClick={() => handleAiScoreSort(job.id)}
+                                  >
+                                    <div className="flex items-center space-x-1 group">
+                                      <span className="text-indigo-400">AI Fit Score</span>
+                                      {aiScoreSort.driveId === job.id ? (
+                                        aiScoreSort.order === 'desc' ? <ChevronDown className="w-3 h-3 text-indigo-400" /> : <ChevronUp className="w-3 h-3 text-indigo-400" />
+                                      ) : (
+                                        <ChevronDown className="w-3 h-3 opacity-0 group-hover:opacity-50" />
+                                      )}
+                                    </div>
+                                  </th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Status</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Applied At</th>
                                   <th className="px-3 py-2.5 text-left font-semibold">Resume</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {applicantsData[job.id].applicants.map((applicant, idx) => {
+                                {(() => {
+                                  let displayApplicants = [...applicantsData[job.id].applicants];
+                                  if (aiScoreSort.driveId === job.id) {
+                                    displayApplicants.sort((a, b) => {
+                                      const scoreA = Number(a.ai_fit_score || 0);
+                                      const scoreB = Number(b.ai_fit_score || 0);
+                                      return aiScoreSort.order === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+                                    });
+                                  }
+                                  return displayApplicants.map((applicant, idx) => {
                                   const statusStyles = {
                                     'Applied': 'bg-blue-500/15 text-blue-300 border-blue-500/25',
                                     'Shortlisted': 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
@@ -1219,6 +1251,11 @@ const HRDashboard = () => {
                                       <td className="px-3 py-2.5 text-slate-300">{applicant.arrear_history ?? '—'}</td>
                                       <td className="px-3 py-2.5 text-slate-400 max-w-[120px] truncate" title={applicant.skills || ''}>{applicant.skills || '—'}</td>
                                       <td className="px-3 py-2.5">
+                                        <span className="font-mono text-indigo-400 font-semibold text-[11px]">
+                                          {applicant.ai_fit_score !== null && applicant.ai_fit_score !== undefined ? `${Math.round(applicant.ai_fit_score)}%` : '0%'}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2.5">
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusStyles[applicant.application_status] || 'bg-slate-800 text-slate-300 border-slate-700'}`}>
                                           {applicant.application_status}
                                         </span>
@@ -1241,8 +1278,9 @@ const HRDashboard = () => {
                                       </td>
                                     </tr>
                                   );
-                                })}
-                              </tbody>
+                                });
+                              })()}
+                            </tbody>
                               </table>
                             </div>
                           </div>

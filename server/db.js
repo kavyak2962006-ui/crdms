@@ -249,11 +249,24 @@ const initializeDatabase = async () => {
         student_id INT NOT NULL,
         job_id INT NOT NULL,
         status ENUM('Applied', 'Shortlisted', 'Interview', 'Offered', 'Rejected') DEFAULT 'Applied',
+        ai_fit_score DECIMAL(5,2) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (job_id) REFERENCES job_postings(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
     `);
+
+    // Ensure ai_fit_score exists if table was already created
+    try {
+      const [appCols] = await pool.query(`SHOW COLUMNS FROM applications`);
+      const appColNames = appCols.map(c => c.Field);
+      if (!appColNames.includes('ai_fit_score')) {
+        await pool.query(`ALTER TABLE applications ADD COLUMN ai_fit_score DECIMAL(5,2) DEFAULT NULL;`);
+        console.log('Added ai_fit_score column to applications');
+      }
+    } catch (migErr) {
+      console.error('Error checking/migrating applications columns:', migErr.message);
+    }
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS interview_slots (
